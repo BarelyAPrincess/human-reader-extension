@@ -1,33 +1,38 @@
 body {
   background-color: #fff;
   color: #312b41;
-  font-family: "Inter", sans-serif;
+  font-family: 'Inter', sans-serif;
   margin: 0;
   padding: 0;
 }
 
 a {
   color: #0000ee;
+  text-decoration: none;
 }
 
 a:visited {
   color: #0000ee;
 }
 
+a:hover, a:focus {
+  text-decoration: underline;
+}
+
 .topSection {
   display: flex;
   align-items: baseline;
   justify-content: center;
-  padding: 12px;
-  padding-top: 20px;
+  padding: 20px 12px 12px;
   min-width: 352px;
 }
-#welcome,
-#settings {
-  padding-left: 20px;
-}
-.welcomeInput {
+
+#welcome, #settings {
   padding: 20px;
+}
+
+.welcomeInput {
+  padding: 20px 0;
 }
 
 .header {
@@ -45,7 +50,7 @@ a:visited {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 20px;
+  padding: 10px 0;
 }
 
 .settingsItemNoPadding{
@@ -60,8 +65,7 @@ label {
   white-space: nowrap;
 }
 
-input,
-select {
+input, select {
   flex: 2;
   margin-left: 12px;
   padding: 4px;
@@ -81,19 +85,22 @@ button {
   cursor: pointer;
 }
 
-button:hover {
+button:hover, button:focus {
   background-color: #414a4c;
+}
+
+button:focus {
+  outline: 2px solid #0000ee;
 }
 
 #info {
   font-size: 12px;
   color: grey;
-  padding: 12px;
+  padding: 12px 20px;
 }
 
 .clearStorage {
   text-align: right;
-  padding-right: 20px;
 }
 
 #speedValue {

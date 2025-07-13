@@ -1,6 +1,6 @@
-const setStorageItem = async (key, value) => {
+const setStorageItem = (key, value) => {
   return new Promise((resolve, reject) => {
-    chrome.storage.local.set({ [key]: value }, function () {
+    chrome.storage.local.set({ [key]: value }, () => {
       if (chrome.runtime.lastError) {
         reject(chrome.runtime.lastError);
       } else {
@@ -10,21 +10,18 @@ const setStorageItem = async (key, value) => {
   });
 };
 
-const readStorage = async (keys) => {
-  return new Promise((resolve, reject) => {
-    chrome.storage.local.get(keys, function (result) {
+const readStorage = (keys) => {
+  return new Promise((resolve) => {
+    chrome.storage.local.get(keys, (result) => {
       resolve(result);
     });
   });
 };
 
 const setWelcomeScreen = () => {
-  const settings = document.getElementById("settings");
-  const welcome = document.getElementById("welcome");
-  const info = document.getElementById("info");
-  settings.style.display = "none";
-  welcome.style.display = "block";
-  info.style.display = "none";
+  document.getElementById("settings").style.display = "none";
+  document.getElementById("welcome").style.display = "block";
+  document.getElementById("info").style.display = "none";
 };
 
 const setSettingsScreen = async () => {
@@ -36,15 +33,15 @@ const setSettingsScreen = async () => {
   info.style.display = "block";
 
   //assumes storage is already set
-  storage = await readStorage(["mode", "speed", "volume"]);
-  document.getElementById("mode").value = storage.mode;
+  const storage = await readStorage(["mode", "speed"]);
+  document.getElementById("mode").value = storage.mode || "eleven_turbo_v2_5";
   setSpeedValue(storage.speed || 1);
   setVolumeValue(storage.volume || 100);
 };
 
 const setSpeedValue = (value) => {
   document.getElementById("speedInput").value = value;
-  document.getElementById("speedValue").textContent = value + "x";
+  document.getElementById("speedValue").textContent = `${value}x`;
 };
 
 const setVolumeValue = (value) => {
@@ -64,14 +61,12 @@ const loadStartupData = async () => {
   ]);
   const mode = storage.mode || "eleven_turbo_v2_5";
   document.getElementById("mode").value = mode;
-  const speedValue = storage.speed || 1;
-  setSpeedValue(speedValue);
-  const volumeValue = storage.volume || 100;
-  setVolumeValue(volumeValue);
+  setSpeedValue(storage.speed || 1);
+  setVolumeValue(storage.volume || 100);
 
   const selectedVoiceId = storage.selectedVoiceId || voices[0].id;
-  setStorageItem("selectedVoiceId", selectedVoiceId);
-  setStorageItem("mode", mode);
+  await setStorageItem("selectedVoiceId", selectedVoiceId);
+  await setStorageItem("mode", mode);
 };
 
 const populateVoices = async () => {
@@ -79,7 +74,6 @@ const populateVoices = async () => {
   const voices = storage.voices;
   if (voices) {
     const select = document.getElementById("voices");
-
     select.innerHTML = ""; // Clear existing options
 
     voices.forEach((voice) => {
@@ -88,8 +82,7 @@ const populateVoices = async () => {
       option.text = voice.name;
       select.appendChild(option);
     });
-    const selectedVoiceId = storage.selectedVoiceId;
-    if (selectedVoiceId) select.value = selectedVoiceId;
+    select.value = storage.selectedVoiceId || voices[0].id;
   }
 };
 
@@ -109,7 +102,7 @@ const setAPIKey = async (apiKey) => {
 };
 
 const fetchVoices = async () => {
-  const storage = await readStorage(["apiKey", "selectedVoiceId", "mode"]);
+  const storage = await readStorage(["apiKey"]);
   if (storage.apiKey) {
     let response = await fetch("https://api.elevenlabs.io/v1/voices", {
       method: "GET",
@@ -118,25 +111,21 @@ const fetchVoices = async () => {
         "Content-Type": "application/json",
       },
     });
-    if (!response.ok) {
+
+    if (response.ok) {
+      const result = await response.json();
+      if (result.voices) {
+        const voices = result.voices.map((voice) => ({ id: voice.voice_id, name: voice.name }));
+        await setStorageItem("voices", voices);
+        await populateVoices();
+        return voices;
+      }
+    } else {
       if (response.status === 401) {
         chrome.storage.local.clear();
         throw new Error("Invalid API key");
       } else {
         console.error(`HTTP error! status: ${response.status}`);
-      }
-    } else {
-      response = await response.json();
-      if (response.voices) {
-        const voices = response.voices.map((voice) => {
-          return {
-            id: voice.voice_id,
-            name: voice.name,
-          };
-        });
-        await setStorageItem("voices", voices);
-        await populateVoices();
-        return voices;
       }
     }
   }
@@ -145,44 +134,41 @@ const fetchVoices = async () => {
 document.addEventListener("DOMContentLoaded", async () => {
   const storage = await readStorage(["apiKey"]);
   if (storage.apiKey) {
-    populateVoices();
-    setSettingsScreen();
+    await populateVoices();
+    await setSettingsScreen();
   } else {
     setWelcomeScreen();
   }
 });
 
-const select = document.getElementById("voices");
-select.addEventListener("change", async (event) => {
-  const selectedVoiceId = event.target.value;
-  await setStorageItem("selectedVoiceId", selectedVoiceId);
+document.getElementById("voices").addEventListener("change", async (event) => {
+  await setStorageItem("selectedVoiceId", event.target.value);
 });
 
 document.getElementById("setApiKey").addEventListener("click", async () => {
   const button = document.getElementById("setApiKey");
-  const inputValue = document.getElementById("apiKey").value;
+  const apiKey = document.getElementById("apiKey").value;
   button.textContent = "...";
+
   try {
-    await setAPIKey(inputValue);
+    await setAPIKey(apiKey);
     await loadStartupData();
     await setSettingsScreen();
-    button.textContent = "Set";
   } catch (error) {
-    console.log(error);
+    console.error(error);
     chrome.storage.local.clear();
-    button.textContent = "Set";
     setWelcomeScreen();
     alert("Invalid API key, please try again.");
-    console.error(error);
+  } finally {
+    button.textContent = "Set";
   }
 });
 
 document.getElementById("mode").addEventListener("change", async () => {
-  const mode = document.getElementById("mode").value;
-  await setStorageItem("mode", mode);
+  await setStorageItem("mode", document.getElementById("mode").value);
 });
 
-document.getElementById("speedInput").addEventListener("input", async (e) => {
+document.getElementById("speedInput").addEventListener("input", async () => {
   const value = document.getElementById("speedInput").value;
   setSpeedValue(value);
   await setStorageItem("speed", value);
@@ -203,12 +189,8 @@ document.getElementById("volumeInput").addEventListener("input", async (e) => {
   }
 });
 
-document.getElementById("clearStorage").addEventListener("click", function () {
-  if (
-    confirm(
-      "Are you sure you want to clear your data? This will remove your API key and all your settings."
-    )
-  ) {
+document.getElementById("clearStorage").addEventListener("click", () => {
+  if (confirm("Are you sure you want to clear your data? This will remove your API key and all your settings.")) {
     chrome.storage.local.clear();
     setWelcomeScreen();
     document.getElementById("apiKey").value = "";
